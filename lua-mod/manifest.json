@@ -1,0 +1,7 @@
+{
+  "id": "stream-party-overlay",
+  "name": "Stream Party Overlay",
+  "version": "1.0.0",
+  "entry": "main.lua",
+  "api": 2
+}
