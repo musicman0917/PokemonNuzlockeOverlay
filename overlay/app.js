@@ -4,7 +4,7 @@
 // showing whatever was last rendered successfully.
 
 const CONFIG = {
-  DATA_URL: "stream_party.json",
+  DATA_URL: (window.OVERLAY_CONFIG && window.OVERLAY_CONFIG.DATA_URL) || "stream_party.json",
   SPRITE_DIR: "sprites/",
   POLL_INTERVAL_MS: 2000,
   RETRY_DELAY_MS: 150,
