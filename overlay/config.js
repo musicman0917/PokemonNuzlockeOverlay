@@ -1,22 +1,28 @@
-// Where the Lua mod's stream_party.json actually lands. The mod writes
-// it with love.filesystem.write(), which is rooted at the LOVE save
-// directory (confirmed via the Gen1Recomp wiki's Guide-Save-Editor page,
-// the same folder save.lua lives in):
+// Where the Lua mod's stream_party.json actually lands. Confirmed by
+// direct observation on a Windows install (searching for recently
+// written files after triggering a mod event in-game) rather than from
+// docs alone - the wiki's generic examples turned out to differ from
+// this build in two ways:
 //
-//   Windows: %APPDATA%\love\pokemon-love2d\stream_party.json
-//   macOS:   ~/Library/Application Support/LOVE/pokemon-love2d/stream_party.json
-//   Linux:   ~/.local/share/love/pokemon-love2d/stream_party.json
+//   1. The identity folder is directly under %APPDATA% with no "love\"
+//      wrapper: %APPDATA%\pokemon-love2d\, not %APPDATA%\love\pokemon-love2d\.
+//   2. Mods don't write to the save-directory root. The mod loader
+//      sandboxes each mod's love.filesystem calls into its own
+//      mod_compat\<mod-id>\ subfolder, so main.lua's
+//      love.filesystem.write("stream_party.json", ...) actually landed at:
 //
-// That's a different folder from this overlay/ directory, so point
-// DATA_URL at the absolute path for your OS/username below. In OBS,
-// add index.html as a Browser Source with "Local file" checked and
-// this path resolves relative to that file - an absolute path here
-// always works regardless of where index.html itself is loaded from.
+//   %APPDATA%\pokemon-love2d\mod_compat\stream-party-overlay\stream_party.json
 //
-// Left as a relative path by default, which only works if you copy
-// index.html/style.css/app.js/config.js/sprites/ directly into that
-// save-data folder alongside stream_party.json.
+// If this doesn't match on macOS/Linux, search for the file after
+// triggering a mod event rather than assuming a path:
+//   macOS:   find ~/Library/Application\ Support -iname stream_party.json
+//   Linux:   find ~/.local/share ~/.config -iname stream_party.json
+//
+// In OBS, add index.html as a Browser Source with "Local file" checked;
+// an absolute path here works regardless of where index.html is loaded
+// from, so point DATA_URL at your resolved path below (forward slashes,
+// %20 for spaces in the username).
 
 window.OVERLAY_CONFIG = {
-  DATA_URL: "stream_party.json",
+  DATA_URL: "file:///C:/Users/music/AppData/Roaming/pokemon-love2d/mod_compat/stream-party-overlay/stream_party.json",
 };
