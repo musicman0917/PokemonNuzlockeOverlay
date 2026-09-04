@@ -632,20 +632,20 @@ Write-Utf8NoBom -Path (Join-Path $OverlayDir "start-overlay-server.bat") -Conten
 # of capability), so this lives as a plain script alongside it instead.
 # ---------------------------------------------------------------------
 
+$overlayServerBat = Join-Path $OverlayDir "start-overlay-server.bat"
+
 Write-Host "One more thing - where's your gen1recomp.exe?" -ForegroundColor Cyan
-Write-Host "This lets us build a single launcher that starts the overlay server AND the game together."
-$gameExeInput = Read-Host "Full path to gen1recomp.exe (press Enter to skip and set this later)"
+Write-Host "This drops the launcher right next to the game and builds one script that starts the overlay server AND the game together."
+$gameExeInput = Read-Host "Full path to gen1recomp.exe (press Enter to skip and set this up later)"
 
 if ([string]::IsNullOrWhiteSpace($gameExeInput)) {
-  $gameExeInput = "C:\PATH\TO\YOUR\gen1recomp.exe"
+  # Don't know where the game lives - fall back to keeping the launcher
+  # with the rest of the overlay, with a placeholder path to edit in.
   $gameExeWasSkipped = $true
-} else {
-  $gameExeWasSkipped = $false
-}
-
-$launchEverything = @"
+  $launchDir = $OverlayDir
+  $launchEverything = @"
 @echo off
-set "GAME_EXE=$gameExeInput"
+set "GAME_EXE=C:\PATH\TO\YOUR\gen1recomp.exe"
 
 if not exist "%GAME_EXE%" (
   echo Could not find gen1recomp.exe at:
@@ -655,11 +655,27 @@ if not exist "%GAME_EXE%" (
   exit /b 1
 )
 
-start "Party Overlay Server" /min "%~dp0start-overlay-server.bat"
+start "Party Overlay Server" /min "$overlayServerBat"
 timeout /t 1 /nobreak >nul
 start "" "%GAME_EXE%"
 "@
-Write-Utf8NoBom -Path (Join-Path $OverlayDir "launch-everything.bat") -Content $launchEverything
+} else {
+  # Known exe location - drop the launcher right next to it, and find the
+  # exe via %~dp0 (relative to itself) so it still works if the whole
+  # game folder ever gets moved, same as happened during testing.
+  $gameExeWasSkipped = $false
+  $launchDir = Split-Path -Parent $gameExeInput
+  $gameExeName = Split-Path -Leaf $gameExeInput
+  $launchEverything = @"
+@echo off
+start "Party Overlay Server" /min "$overlayServerBat"
+timeout /t 1 /nobreak >nul
+start "" "%~dp0$gameExeName"
+"@
+}
+
+$launchEverythingPath = Join-Path $launchDir "launch-everything.bat"
+Write-Utf8NoBom -Path $launchEverythingPath -Content $launchEverything
 
 # ---------------------------------------------------------------------
 # Wrap-up
@@ -679,19 +695,19 @@ if (-not $pythonOk) {
 }
 
 if ($gameExeWasSkipped) {
-  Write-Host "NOTE: You skipped the gen1recomp.exe path, so launch-everything.bat needs a one-time edit before it'll work:" -ForegroundColor Yellow
-  Write-Host "  Right-click $OverlayDir\launch-everything.bat -> Edit, and set GAME_EXE to your actual gen1recomp.exe path."
+  Write-Host "NOTE: You skipped the gen1recomp.exe path, so launch-everything.bat landed in the overlay folder with a placeholder path." -ForegroundColor Yellow
+  Write-Host "  Right-click $launchEverythingPath -> Edit, set GAME_EXE to your actual gen1recomp.exe path, and feel free to move the file next to the exe yourself."
   Write-Host ""
 }
 
 Write-Host "Next steps:"
-Write-Host "  1. Double-click: $OverlayDir\launch-everything.bat"
+Write-Host "  1. Double-click: $launchEverythingPath"
 Write-Host "     (this starts the overlay server minimized in the background, then launches the game)"
 Write-Host "  2. Load or start a save and open the party menu once so the mod writes its first data file."
 Write-Host "  3. In OBS, add a Browser Source with URL http://localhost:$Port/index.html - leave 'Local file' UNCHECKED."
 Write-Host "  4. Position/size it via the source's Properties (Width/Height) and Transform (Position) dialogs, not by dragging the corners."
 Write-Host ""
-Write-Host "(start-overlay-server.bat is also there on its own, if you ever want to run just the server without the game.)"
+Write-Host "($overlayServerBat also runs the server on its own, if you ever want it without the game.)"
 Write-Host ""
 Write-Host "Press Enter to close..."
 Read-Host | Out-Null
