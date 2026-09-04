@@ -634,11 +634,52 @@ Write-Utf8NoBom -Path (Join-Path $OverlayDir "start-overlay-server.bat") -Conten
 
 $overlayServerBat = Join-Path $OverlayDir "start-overlay-server.bat"
 
-Write-Host "One more thing - where's your gen1recomp.exe?" -ForegroundColor Cyan
-Write-Host "This drops the launcher right next to the game and builds one script that starts the overlay server AND the game together."
-$gameExeInput = Read-Host "Full path to gen1recomp.exe (press Enter to skip and set this up later)"
+function Select-GameFolder {
+  # Try a real folder-picker dialog first; fall back to $null (caller
+  # prompts for typed input instead) if Windows Forms isn't available
+  # for any reason, or the user cancels the dialog.
+  try {
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dialog.Description = "Select the folder gen1recomp.exe is installed in (Cancel to type the path instead, or to skip)"
+    $dialog.ShowNewFolderButton = $false
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+      return $dialog.SelectedPath
+    }
+    return $null
+  } catch {
+    return $null
+  }
+}
 
-if ([string]::IsNullOrWhiteSpace($gameExeInput)) {
+Write-Host "One more thing - which folder is Gen1Recomp installed in?" -ForegroundColor Cyan
+Write-Host "This drops the launcher right next to the game and builds one script that starts the overlay server AND the game together."
+Write-Host "A folder picker window should open - if it doesn't appear, alt-tab to check, or just type the path when prompted below."
+
+$gameFolderInput = Select-GameFolder
+if (-not $gameFolderInput) {
+  $gameFolderInput = Read-Host "Folder gen1recomp.exe lives in (press Enter to skip and set this up later)"
+}
+
+$gameExeName = $null
+if (-not [string]::IsNullOrWhiteSpace($gameFolderInput)) {
+  $gameFolderInput = $gameFolderInput.Trim('"')
+  $candidate = Join-Path $gameFolderInput "gen1recomp.exe"
+  if (Test-Path -LiteralPath $candidate) {
+    $gameExeName = "gen1recomp.exe"
+  } else {
+    # Name might differ by version/build - fall back to any single .exe
+    # in that folder rather than assuming the name is wrong entirely.
+    $exeMatches = @(Get-ChildItem -LiteralPath $gameFolderInput -Filter "*.exe" -File -ErrorAction SilentlyContinue)
+    if ($exeMatches.Count -eq 1) {
+      $gameExeName = $exeMatches[0].Name
+    } else {
+      Write-Host "Couldn't find a single .exe in that folder (found $($exeMatches.Count)) - falling back to a placeholder you can edit in by hand." -ForegroundColor Yellow
+    }
+  }
+}
+
+if (-not $gameExeName) {
   # Don't know where the game lives - fall back to keeping the launcher
   # with the rest of the overlay, with a placeholder path to edit in.
   $gameExeWasSkipped = $true
@@ -664,8 +705,7 @@ start "" "%GAME_EXE%"
   # exe via %~dp0 (relative to itself) so it still works if the whole
   # game folder ever gets moved, same as happened during testing.
   $gameExeWasSkipped = $false
-  $launchDir = Split-Path -Parent $gameExeInput
-  $gameExeName = Split-Path -Leaf $gameExeInput
+  $launchDir = $gameFolderInput
   $launchEverything = @"
 @echo off
 start "Party Overlay Server" /min "$overlayServerBat"
