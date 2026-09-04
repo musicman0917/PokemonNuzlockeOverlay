@@ -612,15 +612,54 @@ window.OVERLAY_CONFIG = {
 '@
 Write-Utf8NoBom -Path (Join-Path $OverlayDir "config.js") -Content $configJs
 
-$startScript = @'
+$Port = 8080
+
+$startScript = @"
 @echo off
 cd /d "%~dp0"
-echo Starting overlay server at http://localhost:8000/index.html
+echo Starting overlay server at http://localhost:$Port/index.html
 echo Leave this window open while streaming. Close it or press Ctrl+C to stop.
-python -m http.server 8000
+python -m http.server $Port
 pause
-'@
+"@
 Write-Utf8NoBom -Path (Join-Path $OverlayDir "start-overlay-server.bat") -Content $startScript
+
+# ---------------------------------------------------------------------
+# Combined launcher: starts the overlay server (minimized, in the
+# background) and then the game itself, so there's one thing to double
+# click before streaming. The Lua mod's sandbox can't launch external
+# processes itself (confirmed via the wiki - it strips exactly this kind
+# of capability), so this lives as a plain script alongside it instead.
+# ---------------------------------------------------------------------
+
+Write-Host "One more thing - where's your gen1recomp.exe?" -ForegroundColor Cyan
+Write-Host "This lets us build a single launcher that starts the overlay server AND the game together."
+$gameExeInput = Read-Host "Full path to gen1recomp.exe (press Enter to skip and set this later)"
+
+if ([string]::IsNullOrWhiteSpace($gameExeInput)) {
+  $gameExeInput = "C:\PATH\TO\YOUR\gen1recomp.exe"
+  $gameExeWasSkipped = $true
+} else {
+  $gameExeWasSkipped = $false
+}
+
+$launchEverything = @"
+@echo off
+set "GAME_EXE=$gameExeInput"
+
+if not exist "%GAME_EXE%" (
+  echo Could not find gen1recomp.exe at:
+  echo   %GAME_EXE%
+  echo Edit this file (right-click it, Edit) and fix the GAME_EXE path above the line "if not exist".
+  pause
+  exit /b 1
+)
+
+start "Party Overlay Server" /min "%~dp0start-overlay-server.bat"
+timeout /t 1 /nobreak >nul
+start "" "%GAME_EXE%"
+"@
+Write-Utf8NoBom -Path (Join-Path $OverlayDir "launch-everything.bat") -Content $launchEverything
 
 # ---------------------------------------------------------------------
 # Wrap-up
@@ -628,21 +667,31 @@ Write-Utf8NoBom -Path (Join-Path $OverlayDir "start-overlay-server.bat") -Conten
 
 $pythonOk = [bool](Get-Command python -ErrorAction SilentlyContinue)
 
+Write-Host ""
 Write-Host "Done!" -ForegroundColor Green
 Write-Host ""
 
 if (-not $pythonOk) {
   Write-Host "NOTE: Python wasn't found on this PC." -ForegroundColor Yellow
   Write-Host "Install it from https://www.python.org/downloads/ (check 'Add python.exe to PATH' during setup)"
-  Write-Host "- it's needed to run the local server the overlay uses (step 2 below)."
+  Write-Host "- it's needed to run the local server the overlay uses."
+  Write-Host ""
+}
+
+if ($gameExeWasSkipped) {
+  Write-Host "NOTE: You skipped the gen1recomp.exe path, so launch-everything.bat needs a one-time edit before it'll work:" -ForegroundColor Yellow
+  Write-Host "  Right-click $OverlayDir\launch-everything.bat -> Edit, and set GAME_EXE to your actual gen1recomp.exe path."
   Write-Host ""
 }
 
 Write-Host "Next steps:"
-Write-Host "  1. Launch Gen1Recomp, load or start a save, and open the party menu once so the mod writes its first data file."
-Write-Host "  2. Double-click: $OverlayDir\start-overlay-server.bat   (leave that window open while streaming)"
-Write-Host "  3. In OBS, add a Browser Source with URL http://localhost:8000/index.html - leave 'Local file' UNCHECKED."
+Write-Host "  1. Double-click: $OverlayDir\launch-everything.bat"
+Write-Host "     (this starts the overlay server minimized in the background, then launches the game)"
+Write-Host "  2. Load or start a save and open the party menu once so the mod writes its first data file."
+Write-Host "  3. In OBS, add a Browser Source with URL http://localhost:$Port/index.html - leave 'Local file' UNCHECKED."
 Write-Host "  4. Position/size it via the source's Properties (Width/Height) and Transform (Position) dialogs, not by dragging the corners."
+Write-Host ""
+Write-Host "(start-overlay-server.bat is also there on its own, if you ever want to run just the server without the game.)"
 Write-Host ""
 Write-Host "Press Enter to close..."
 Read-Host | Out-Null
